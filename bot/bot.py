@@ -138,15 +138,29 @@ async def process_event(message):
     content = message.content
     msg_type = "log"
     
-    if content.lower().startswith("!idea"):
-        msg_type = "idea"
-        content = content.replace("!idea", "").strip()
-    elif content.lower().startswith("!task"):
-        msg_type = "task"
-        content = content.replace("!task", "").strip()
-    elif content.lower().startswith("!bug"):
-        msg_type = "bug"
-        content = content.replace("!bug", "").strip()
+    # Nova lista de comandos táticos
+    comandos_validos = ["!idea", "!task", "!bug", "!log", "!intel", "!sos"]
+    
+    for cmd in comandos_validos:
+        if content.lower().startswith(cmd):
+            msg_type = cmd.replace("!", "") # Extrai o tipo (ex: "intel")
+            content = content[len(cmd):].strip() # Limpa o comando do texto
+            break
+
+    # Persistência no Supabase
+    try:
+        data = {
+            "type": msg_type,
+            "content": content,
+            "user_name": message.author.name,
+            "channel_name": message.channel.name,
+            "status": "open" if msg_type != "log" else "archived" # Logs já nascem arquivados
+        }
+        supabase.table("events").insert(data).execute()
+    except Exception as e:
+        print(f"❌ Erro Supabase: {e}")
+
+    return msg_type
 
     # 1. Persistência no Supabase
     try:
@@ -179,25 +193,56 @@ async def on_command_error(ctx, error):
     raise error
 
 @bot.event
+@bot.event
 async def on_message(message):
     if message.author == bot.user:
         return
 
-    # Processa comandos de evento (!idea, !task, !bug)
-    if any(message.content.startswith(p) for p in ["!idea", "!task", "!bug"]):
+    comandos_taticos = ["!idea", "!task", "!bug", "!log", "!intel", "!sos"]
+
+    # Processa os comandos que vão para o Banco de Dados
+    if any(message.content.lower().startswith(p) for p in comandos_taticos):
         # 1. Salva no banco de dados
         msg_type = await process_event(message)
-        emoji = {"idea": "💡", "task": "✅", "bug": "🪲"}.get(msg_type, "📝")
+        
+        # Dicionário de Emojis atualizado
+        emojis = {"idea": "💡", "task": "✅", "bug": "🪲", "log": "📝", "intel": "👁️", "sos": "🚨"}
+        emoji = emojis.get(msg_type, "⚙️")
         await message.add_reaction(emoji)
         
-        # 2. Chama a IA via túnel e responde
-        async with message.channel.typing():
-            content = message.content.replace(f"!{msg_type}", "").strip()
-            ai_response = await analyze_with_ai(msg_type, content, message.author.name)
-            await message.reply(f"🤖 **Análise FRONTLINE:**\n\n{ai_response}")
+        # 2. Chama a IA via túnel (Apenas se não for um simples log/intel)
+        if msg_type not in ["log", "intel"]:
+            async with message.channel.typing():
+                content = message.content.split(" ", 1)[1] if " " in message.content else message.content
+                ai_response = await analyze_with_ai(msg_type, content, message.author.name)
+                await message.reply(f"🤖 **Análise FRONTLINE:**\n\n{ai_response}")
+        else:
+            await message.reply(f"{emoji} **Registro '{msg_type.upper()}' arquivado com sucesso no Supabase.**")
+            
+        return # Impede que ele tente ler como comando normal do discord
+
+    # Processa comandos normais do bot (como o !status que faremos abaixo)
+    await bot.process_commands(message)
     
     # Processa comandos normais do discord.py
     await bot.process_commands(message)
+
+@bot.command(name="status")
+async def system_status(ctx):
+    """Checa se o PC local e a IA estão respondendo"""
+    msg = await ctx.send("📡 **Pulsando servidores locais...**")
+    
+    try:
+        # Tenta bater no servidor Ollama da sua casa via Ngrok
+        timeout = aiohttp.ClientTimeout(total=5)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(OLLAMA_URL.replace("/api/generate", ""), headers={"ngrok-skip-browser-warning": "true"}) as response:
+                if response.status == 200:
+                    await msg.edit(content="🟢 **STATUS DO SISTEMA: OPERACIONAL**\n- Nuvem (Render): OK\n- Banco (Supabase): OK\n- Túnel (Ngrok): Conectado\n- IA Local (Ollama): Respondendo")
+                else:
+                    await msg.edit(content=f"🟡 **STATUS DO SISTEMA: DEGRADADO**\n- Nuvem: OK\n- IA Local: Erro HTTP {response.status}")
+    except Exception:
+        await msg.edit(content="🔴 **STATUS DO SISTEMA: CRÍTICO**\n- Nuvem (Render): OK\n- Túnel/IA Local: **DESCONECTADO**. Verifique o Ngrok no PC-Base.")
 
 
 # ================= EXECUÇÃO =================
