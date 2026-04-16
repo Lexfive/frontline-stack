@@ -33,7 +33,7 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Configuração Ollama (IA)
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
-OLLAMA_MODEL = "mistral:7b-instruct-q4_0" # Atualizado para bater com o seu terminal
+OLLAMA_MODEL = "llama3.2:1b" # Modelo peso-pena ativado
 
 # ================= INTENTS =================
 intents = discord.Intents.all()
