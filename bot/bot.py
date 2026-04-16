@@ -41,34 +41,62 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 
 # ================= MÓDULO DE INTELIGÊNCIA (OLLAMA OTIMIZADO) =================
+# ================= MÓDULO DE INTELIGÊNCIA (OLLAMA CHAT API) =================
 async def analyze_with_ai(msg_type, content, user):
-    """Envia o dado para o Ollama processar via túnel com limites de hardware"""
+    """Envia o dado para o Ollama processar usando a API de Chat (Personalidade DevOps)"""
     
-    # 🚨 SYSTEM PROMPT REFINADO PARA MODELOS LEVES (1B)
-    system_prompt = """VOCÊ É O NÚCLEO TÁTICO FRONTLINE.
-REGRAS: RESPOSTA CURTA, DIRETA, SEM SAUDAÇÕES.
-FORMATO:
-**DIAGNÓSTICO**
-> [Prioridade] - [Viabilidade]
-**PLANO:**
-- [ ] [Ação 1]
-- [ ] [Ação 2]"""
+    # 🚨 O novo endpoint correto para o modo "messages"
+    chat_url = OLLAMA_URL.replace("/api/generate", "/api/chat")
+    
+    # 🧠 PERSONALIDADE FRONTLINE
+    system_prompt = """Você é um assistente técnico avançado chamado Frontline.
+Regras de comportamento:
+- Responda sempre em português do Brasil (PT-BR).
+- Seja direto, objetivo e prático. Evite enrolação e respostas longas.
+- Use linguagem clara, mas com precisão técnica. Pense como um DevOps ao responder.
+- Trate o usuário como "Lexfive".
+- Se a pergunta for simples, responda curto. Se for complexa, explique de forma estruturada.
+- Tom profissional, confiante e focado em resolver rápido o problema.
+- NUNCA invente informações. Se não souber, diga.
+- Vá direto ao ponto, sem saudações (não diga "olá", "claro", "aqui está").
 
-    full_prompt = f"{system_prompt}\n\n[USER: {user} | TYPE: {msg_type.upper()}]\nCONTEÚDO: {content}\n\nANÁLISE:"
+FORMATO DE RESPOSTA OBRIGATÓRIO (para registros técnicos):
+- Use listas ou bullet points.
+- Destaque comandos ou instruções claramente."""
 
-    # 🚀 PAYLOAD COM LIMITES DE DESEMPENHO (O segredo para não travar o PC)
+    # Configuração rígida de limite para não travar a máquina
     payload = {
-        "model": OLLAMA_MODEL,
-        "prompt": full_prompt,
+        "model": OLLAMA_MODEL, # Vai usar o modelo que definimos no topo do bot.py (llama3.2:1b)
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Ação [{msg_type.upper()}]: {content}"}
+        ],
         "stream": False,
         "options": {
-            "num_thread": 2,       # Usa apenas 2 núcleos do processador
-            "num_ctx": 1024,       # Limita uso de memória RAM (contexto curto)
-            "num_predict": 300,    # Evita que a IA divague (resposta rápida)
-            "temperature": 0.4     # Deixa a IA mais focada e menos "criativa"
+            "num_thread": 2,       # Mantém o PC livre
+            "num_predict": 250,    # 🚨 LIMITADOR: Impede que o bot fale demais e trave
+            "temperature": 0.3     # IA focada e fria
         }
     }
 
+    headers = {
+        "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "true"
+    }
+
+    try:
+        timeout_config = aiohttp.ClientTimeout(total=300)
+        async with aiohttp.ClientSession(timeout=timeout_config) as session:
+            async with session.post(chat_url, json=payload, headers=headers) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    # A API de chat devolve a resposta em um local diferente do JSON
+                    return data.get("message", {}).get("content", "⚠️ Nenhuma resposta gerada.")
+                else:
+                    texto_erro = await response.text()
+                    return f"❌ Erro de conexão HTTP {response.status} - {texto_erro}"
+    except Exception as e:
+        return f"🔌 Erro Crítico de Comunicação IA: {e}"
     # BYPASS DO NGROK
     headers = {
         "Content-Type": "application/json",
