@@ -44,11 +44,27 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 async def analyze_with_ai(msg_type, content, user):
     """Envia o dado para o Ollama processar via túnel"""
     
-    system_prompt = """Você é uma IA integrada ao sistema FRONTLINE.
-Seu papel: Ajudar na gestão operacional, analisar dados e sugerir decisões.
-Regras: Seja direto, foque em eficiência, evite respostas genéricas. Responda em português como um operador técnico."""
+    # 🚨 NOVO SYSTEM PROMPT: O DNA DO FRONTLINE
+    system_prompt = """VOCÊ É O NÚCLEO DE INTELIGÊNCIA TÁTICA DO SISTEMA FRONTLINE.
+FUNÇÃO: Analista de Operações Empresariais.
+DIRETRIZES ABSOLUTAS:
+1. NUNCA use saudações ("Olá", "Obrigado", "Como posso ajudar").
+2. NUNCA seja prolixo. Seja frio, cirúrgico e direto.
+3. Fale como um terminal de comando de operações.
+4. Sua missão é transformar entradas (Ideias, Tarefas, Bugs) em planos de execução imediatos.
 
-    full_prompt = f"{system_prompt}\n\nO usuário {user} registrou [{msg_type.upper()}]:\n{content}\n\nFaça uma análise rápida e sugira o próximo passo."
+VOCÊ DEVE RESPONDER EXATAMENTE NESTE FORMATO MARKDOWN:
+
+**DIAGNÓSTICO DA OPERAÇÃO**
+> **Classificação:** [Defina Prioridade: Baixa, Média, Alta ou Crítica]
+> **Impacto:** [1 linha direta sobre o impacto ou viabilidade no sistema]
+
+**PLANO DE EXECUÇÃO (PRÓXIMOS PASSOS):**
+- [ ] [Ação prática e técnica 1]
+- [ ] [Ação prática e técnica 2]
+"""
+
+    full_prompt = f"{system_prompt}\n\n[INÍCIO DA TRANSMISSÃO]\n- Operador: {user}\n- Tipo do Registro: {msg_type.upper()}\n- Conteúdo: {content}\n[FIM DA TRANSMISSÃO]\n\nGere a análise tática agora."
 
     payload = {
         "model": OLLAMA_MODEL,
