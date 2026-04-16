@@ -40,47 +40,46 @@ intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 
-# ================= MÓDULO DE INTELIGÊNCIA (OLLAMA) =================
+# ================= MÓDULO DE INTELIGÊNCIA (OLLAMA OTIMIZADO) =================
 async def analyze_with_ai(msg_type, content, user):
-    """Envia o dado para o Ollama processar via túnel"""
+    """Envia o dado para o Ollama processar via túnel com limites de hardware"""
     
-    # 🚨 NOVO SYSTEM PROMPT: O DNA DO FRONTLINE
-    system_prompt = """VOCÊ É O NÚCLEO DE INTELIGÊNCIA TÁTICA DO SISTEMA FRONTLINE.
-FUNÇÃO: Analista de Operações Empresariais.
-DIRETRIZES ABSOLUTAS:
-1. NUNCA use saudações ("Olá", "Obrigado", "Como posso ajudar").
-2. NUNCA seja prolixo. Seja frio, cirúrgico e direto.
-3. Fale como um terminal de comando de operações.
-4. Sua missão é transformar entradas (Ideias, Tarefas, Bugs) em planos de execução imediatos.
+    # 🚨 SYSTEM PROMPT REFINADO PARA MODELOS LEVES (1B)
+    system_prompt = """VOCÊ É O NÚCLEO TÁTICO FRONTLINE.
+REGRAS: RESPOSTA CURTA, DIRETA, SEM SAUDAÇÕES.
+FORMATO:
+**DIAGNÓSTICO**
+> [Prioridade] - [Viabilidade]
+**PLANO:**
+- [ ] [Ação 1]
+- [ ] [Ação 2]"""
 
-VOCÊ DEVE RESPONDER EXATAMENTE NESTE FORMATO MARKDOWN:
+    full_prompt = f"{system_prompt}\n\n[USER: {user} | TYPE: {msg_type.upper()}]\nCONTEÚDO: {content}\n\nANÁLISE:"
 
-**DIAGNÓSTICO DA OPERAÇÃO**
-> **Classificação:** [Defina Prioridade: Baixa, Média, Alta ou Crítica]
-> **Impacto:** [1 linha direta sobre o impacto ou viabilidade no sistema]
-
-**PLANO DE EXECUÇÃO (PRÓXIMOS PASSOS):**
-- [ ] [Ação prática e técnica 1]
-- [ ] [Ação prática e técnica 2]
-"""
-
-    full_prompt = f"{system_prompt}\n\n[INÍCIO DA TRANSMISSÃO]\n- Operador: {user}\n- Tipo do Registro: {msg_type.upper()}\n- Conteúdo: {content}\n[FIM DA TRANSMISSÃO]\n\nGere a análise tática agora."
-
+    # 🚀 PAYLOAD COM LIMITES DE DESEMPENHO (O segredo para não travar o PC)
     payload = {
         "model": OLLAMA_MODEL,
         "prompt": full_prompt,
-        "stream": False
+        "stream": False,
+        "options": {
+            "num_thread": 2,       # Usa apenas 2 núcleos do processador
+            "num_ctx": 1024,       # Limita uso de memória RAM (contexto curto)
+            "num_predict": 300,    # Evita que a IA divague (resposta rápida)
+            "temperature": 0.4     # Deixa a IA mais focada e menos "criativa"
+        }
     }
 
-    # 🚨 BYPASS DO NGROK: Cabeçalho obrigatório para pular a tela de aviso HTML
+    # BYPASS DO NGROK
     headers = {
         "Content-Type": "application/json",
         "ngrok-skip-browser-warning": "true"
     }
 
     try:
-        async with aiohttp.ClientSession() as session:
-            # Passando o 'headers' na requisição
+        # Timeout de segurança aumentado para evitar erros em CPU
+        timeout_config = aiohttp.ClientTimeout(total=300)
+        
+        async with aiohttp.ClientSession(timeout=timeout_config) as session:
             async with session.post(OLLAMA_URL, json=payload, headers=headers) as response:
                 if response.status == 200:
                     data = await response.json()
@@ -89,7 +88,7 @@ VOCÊ DEVE RESPONDER EXATAMENTE NESTE FORMATO MARKDOWN:
                     texto_erro = await response.text()
                     return f"❌ Erro de conexão com Ollama: HTTP {response.status} - {texto_erro}"
     except aiohttp.ClientConnectorError:
-        return "🔌 IA Offline: O túnel (Ngrok) caiu ou o Ollama está desligado no PC base."
+        return "🔌 IA Offline: O túnel (Ngrok) ou o Ollama estão desligados."
     except Exception as e:
         return f"⚠️ Erro na IA: {e}"
 
