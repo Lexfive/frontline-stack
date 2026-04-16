@@ -33,7 +33,7 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Configuração Ollama (IA)
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
-OLLAMA_MODEL = "llama3" # Ajuste para o modelo que você baixou no seu PC (ex: mistral, phi3)
+OLLAMA_MODEL = "mistral:7b-instruct-q4_0" # Atualizado para bater com o seu terminal
 
 # ================= INTENTS =================
 intents = discord.Intents.all()
@@ -56,14 +56,22 @@ Regras: Seja direto, foque em eficiência, evite respostas genéricas. Responda 
         "stream": False
     }
 
+    # 🚨 BYPASS DO NGROK: Cabeçalho obrigatório para pular a tela de aviso HTML
+    headers = {
+        "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "true"
+    }
+
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(OLLAMA_URL, json=payload) as response:
+            # Passando o 'headers' na requisição
+            async with session.post(OLLAMA_URL, json=payload, headers=headers) as response:
                 if response.status == 200:
                     data = await response.json()
                     return data.get("response", "⚠️ Nenhuma resposta gerada.")
                 else:
-                    return f"❌ Erro de conexão com Ollama: HTTP {response.status}"
+                    texto_erro = await response.text()
+                    return f"❌ Erro de conexão com Ollama: HTTP {response.status} - {texto_erro}"
     except aiohttp.ClientConnectorError:
         return "🔌 IA Offline: O túnel (Ngrok) caiu ou o Ollama está desligado no PC base."
     except Exception as e:
